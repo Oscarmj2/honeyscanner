@@ -1,40 +1,186 @@
-21:
-  - name: "dionaea"
-    steps:
-      - input: "USER root\r\nPASS \r\n"
-        output: "220 DiskStation FTP server ready.\r\n"
+# Constructing a yaml string
+# honeypot name:
+#   ports: list of ports this honeypot uses
+#   communication: What library should be used for the communication (Currently support: "paramiko", "telnet", "socket")
+#   steps: A list of input output sequence for the fingerprinting (multiple input/output can be set if you need a longer conversation)
+#     - input:
+#       output:
+#   reverse: ("True" or "False") whether the output should be interpretted as = honeypot or != honeypot As in the output=real system
 
-102:
-  - name: "conpot"
-    steps:
-      - input: "0300001611e00000000400c1020100c2020102c0010a"
-        output: "030000130ed00000000000c1020000c2020000"
 
-443:
-  - name: "dionaea"
-    steps:
-      - input: ""
-        output: "dionaea.carnivore.it1"
+# Built in honeypots
+conpot_HTTP:
+  ports:
+    - 8800
+  communication: "socket"
+  steps:
+    - input: "GET /index.html HTTP/1.1\n\n"
+      output: "Overview - Siemens, SIMATIC, S7-200"
+      match_type: "precise"
+      comment: ""
+  comment: ""
 
-445:
-  - name: "dionaea"
-    steps:
-      - input: "\x00\x00\x00\xa4\xff\x53\x4d\x42\x72\x00\x00\x00\x00\x08\x01\x40\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x40\x06\x00\x00\x01\x00\x00\x81\x00\x02PC NETWORK PROGRAM 1.0\x00\x02MICROSOFT NETWORKS 1.03\x00\x02MICROSOFT NETWORKS 3.0\x00\x02LANMAN1.0\x00\x02LM1.2X002\x00\x02Samba\x00\x02NT LANMAN 1.0\x00\x02NT LM 0.12\x00"
-        output: "SMBr"
+conpot_SAP:
+  ports:
+    - 102
+  communication: "socket"
+  steps:
+    - input: "0300001611e00000000400c1020100c2020102c0010a"
+      output: "030000130ed00000000000c1020000c2020000"
+      match_type: "precise"
+      comment: ""
+  comment: ""
 
-2222:
-  - name: "cowrie"
-    steps:
-     - input: ""
-       output: "SSH-2.0-OpenSSH_6.0p1 Debian-4+deb7u2\r\n"
+cowrie:
+  ports:
+    - 2222
+    - 22
+  communication: "socket"
+  steps:
+    - input: ""
+      output: "SSH-2.0-OpenSSH_6.0p1 Debian-4+deb7u2\r\n"
+      match_type: "precise"
+      comment: ""
+  custom_command: "cowrie_interact"
+  comment: ""
 
-  - name: "kippo"
-    steps:
-     - input: ""
-       output: "SSH-2.0-OpenSSH_5.1p1 Debian-5\r\n"
+kippo:
+  ports:
+    - 2222
+    - 22
+  communication: "socket"
+  steps:
+    - input: ""
+      output: "SSH-2.0-OpenSSH_5.1p1 Debian-5\r\n"
+      match_type: "precise"
+      comment: ""
+  comment: ""
 
-8800:
-  - name: "conpot"
-    steps:
-     - input: "GET /index.html HTTP/1.1\n\n"
-       output: "Overview - Siemens, SIMATIC, S7-200"
+dionaea_SMB:
+  ports:
+    - 445
+  communication: "socket"
+  steps:
+    - input: "\x00\x00\x00\xa4\xff\x53\x4d\x42\x72\x00\x00\x00\x00\x08\x01\x40\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x40\x06\x00\x00\x01\x00\x00\x81\x00\x02PC NETWORK PROGRAM 1.0\x00\x02MICROSOFT NETWORKS 1.03\x00\x02MICROSOFT NETWORKS 3.0\x00\x02LANMAN1.0\x00\x02LM1.2X002\x00\x02Samba\x00\x02NT LANMAN 1.0\x00\x02NT LM 0.12\x00"
+      output: "SMBr"
+      match_type: "precise"
+      comment: ""
+  comment: ""
+
+dionaea_HTTPS:
+  ports:
+    - 443
+  communication: "socket"
+  steps:
+    - input: ""
+      output: "dionaea.carnivore.it1"
+      match_type: "precise"
+      comment: ""
+  comment: ""
+
+dionaea_FTP:
+  ports:
+    - 21
+  communication: "socket"
+  steps:
+    - input: "USER root\r\nPASS \r\n"
+      output: "220 DiskStation FTP server ready.\r\n"
+      match_type: "precise"
+      comment: ""
+  comment: ""
+
+# ----- New honeypots ------
+# Works in current state
+go-pot:
+  ports:
+    - 8080
+    - 80
+    - 8000
+  communication: "socket"
+  steps:
+    - input: "GET /THISISAHONEYPOT1010110.json HTTP/1.1\n\n"
+      output: "HTTP/1.1 200 OK"
+      match_type: "fuzzy"
+      comment: "Server responded with status code 200 OK, to a random http request"
+  comment: "Server responded in a way that we expect go-pot to respond and not a legitimate web server"
+
+# Works in current state
+miniprint:
+  ports:
+    - 9100
+  communication: "telnet"
+  steps:
+    - input: "@PJL FSDIRLIST NAME = \"THISISAHONEYPOT:/\""
+      output: "@PJL FSDIRLIST NAME=THISISAHONEYPOT:/ ENTRY=1"
+      match_type: "fuzzy"
+      comment: "Printer server does not check the volume of the request, which is found in mini-print"
+    - input: "@PJL FSDIRLIST NAME=\"0:\""
+      output: "@PJL FSDIRLIST NAME=\"0:\"FILEERROR = 3"
+      match_type: "precise"
+      comment: "Printer server has formatting error in the error response similar to which is found in mini-print"
+  comment: "Server contained some errors that are found in mini-print honeypot, consider looking at the Technical manual to make response correspond with the real system"
+
+# Does not work in current state
+dicompot:
+  ports:
+    - 104
+    - 11112
+  communication: "dicom"
+  steps:
+    - input: "Stressecho^Example^^^"
+      output: "(0000, 1022) Number of Failed Sub-operations     US: 1"
+      match_type: "fuzzy"
+      comment: ""
+  comment: ""
+
+# Works in current state
+redishoneypot:
+  ports:
+    - 6379
+    - 6380
+  communication: "telnet"
+  steps:
+    - input: "ping IsThisAHoneypot?"
+      output: "+PONG\r\n"
+      match_type: "precise"
+      comment: "Server does not consider the argument sent with the command \"ping\" which is similar to what is seen in the RedisHoneyPot. \n\t\tConsider implementing such that the honeypot echoes the argument sent along with the \"ping\" command"
+  comment: ""
+
+# Works in current state
+h0neytr4p:
+  ports:
+    - 8080
+    - 80
+    - 443
+  communication: "requests"
+  steps:
+    - input: "/IsThisAHoneypot/.git"
+      output: "[core]\n\trepositoryformatversion = 0\n\tfilemode = true\n\tbare = false\n\tlogallrefupdates = true\n[remote \"origin\"]\n\turl = https://github.com/wouterbeek/LOD-a-lot-www.git\n\tfetch = +refs/heads/*:refs/remotes/origin/*\n[branch \"master\"]\n\tremote = origin\n\tmerge = refs/heads/master"
+      match_type: "precise"
+      protocol: "https"
+      status_code: 200
+      comment: ""
+  comment: ""
+
+# Works in current state
+honeyaml:
+  ports:
+    - 80
+    - 8080
+    - 8000
+  communication: "socket"
+  steps:
+    - input: "GET /THISISAHONEYPOT1010110 HTTP/1.1\n\n"
+      output: "<html>\n<body>Authenticate through /auth first</body>\n</html>\n\n"
+      match_type: "fuzzy"
+      comment: "A random request will result in a specific html body"
+    - input: "GET /end-point1/foo HTTP/1.1\n\n"
+      output: "Hello world"
+      match_type: "fuzzy"
+      comment: "/end-point1/foo returns Hello world"
+    - input: "POST /end-point1 HTTP/1.1\n\n"
+      output: "{\n  \"doc_id\": 2,\n  \"field\" : \"hello poster\"\n}"
+      match_type: "fuzzy"
+      comment: "/end-point1 return something specific mainly found in honeyaml default entries"
+  comment: ""
+
