@@ -1,8 +1,8 @@
-import requests
 import socket
-import ssl
 import yaml
 import datetime
+import time
+import math
 
 from colorama import Fore
 from core import Honeyscanner
@@ -25,14 +25,23 @@ class HoneypotDetector:
         """
         self.ip = ip
         signatures_path = Path(__file__).parent / "signatures.yaml"
-        signature_score_path = Path(__file__).parent / "scoring.yaml"
-        self.log_file = "test.log"
         with open(signatures_path, "r") as stream:
             self.signatures: dict = yaml.safe_load(stream)
 
-        with open(signature_score_path, "r") as stream:
-            self.score_signatures: dict = yaml.safe_load(stream)
+        self.detection_log = 'detection.log' # Log where detection scores will be written
+        self.communcation_log = 'detection_communcation.log' # Log where all communication with server during detection will be written
 
+    def get_version(self, name):
+        if name == 'cowrie':
+            return '2.5.0'
+        if name == 'kippo':
+            return '0.9'
+        if name == 'dionaea':
+            return '0.11.0'
+        if name == 'conpot':
+            return '0.6.0'
+        
+        return ''
 
     def check_port(self, port: int) -> bool:
         """
@@ -67,6 +76,8 @@ class HoneypotDetector:
             PortSet: A set of open ports on the given IP address.
         """
         ports: PortSet = {port for port in range(1, 65536)}
+        #ports: PortSet = {19, 21, 22, 23, 25, 42, 53, 69, 80, 102, 110, 123, 135, 143, 161, 389, 443, 445, 502, 623, 631, 1025, 1080, 1433, 1521, 1723, 1883, 1900, 2404, 2575, 3000, 3306, 3389,
+        #                   5000, 5060, 5432, 5555, 5900, 6379, 6667, 8080, 8081, 8090, 8443, 9100, 9200, 10001, 11112, 11211, 11434, 25565, 44818, 47808, 50100, 64294, 64295}
         open_ports = set()
         print(f"{Fore.GREEN}[+]{Fore.RESET} Starting port scan on {self.ip}")
 
@@ -79,9 +90,11 @@ class HoneypotDetector:
 
 
     def write_log(self, open_ports, port_results):
-        with open('test.log', 'a') as f:
-            # Beggining of this log entry
-            f.write('------------------------ \n')
+        """
+        
+        """
+        with open(self.detection_log, 'a') as f:
+            f.write('------------ New log start ---------- \n') # To easily search the log for all new entries
             f.write(str(datetime.datetime.now()))
             f.write('\n')
 
@@ -90,18 +103,14 @@ class HoneypotDetector:
 
             # Results of each port
             for result in port_results:
-                f.write('[*] Port ' + str(result[0]) + '\n\t')
-                if result[1] is None:
-                    f.write('Found no signatures\n\n')
-                else:
-                    
-                    for r in result[1]:
-                        f.write('Found ' + str(r['found_signatures']) + '/' + str(r['total_signatures']) + ' ' + str(r['honeypot']) + ': input ' + str(r['signature_id']) + '\n\t')
-                        f.write('Comments: \n\t\t')
-                        
-                        for id in r['signature_id']:
-                            f.write(str(id) + ': ' + str(r['comments'][str(id)]) + '\n\t\t')
-                        f.write('Overall comment: ' + str(r['comments']['overall_comment']) + '\n\n')
+                f.write(f'[*] Port {result['port']} - Detected following from honeypot {result['name']} with confidence {result['score']}\n\t')
+
+                for index, score in result.items():
+                    if index != 'port' and index != 'name':
+                        f.write(f'Positive result on input #{index} with score {score}')
+                        f.write('\n\t')
+                
+                f.write('\n')
 
 
     def detect_honeypot(
@@ -124,17 +133,24 @@ class HoneypotDetector:
                           honeypot.
         """
         self.open_ports: PortSet = self.check_open_ports()
+        
         if not self.open_ports:
             return
 
         signature_results = []
-
-
         for port in self.open_ports:
             print(f"{Fore.YELLOW}[~]{Fore.RESET} Matching signatures for port {port}...")
-            for honeypot, value in self.score_signatures.items():
-                result = self.create_result_dict()
-                score = self.signature_check(port, value['protocol'], value['steps'])
+
+            # Log for all communcations with 
+            with open(self.communcation_log, 'a') as f:
+                f.write(f'\n----- Fingerprint matching on port {port} ----- \n')
+
+            for honeypot, value in self.signatures.items():
+                with open(self.communcation_log, 'a') as f:
+                    f.write(f'*** Matching for honeypot: {honeypot} ***\n')
+
+                result = {'port' : port, 'name' : honeypot}
+                score = self.signature_check(port, value['protocol'], value['steps'], result)
                 
                 # Run possible custom functions
                 if 'custom_functions' in value:
@@ -142,6 +158,7 @@ class HoneypotDetector:
                         func = getattr(custom_functions, f['function_name'])
                         s = func(self.ip, port)
                         score = score + s
+                        result['custom'] = s
 
                 if len(score) > 0:
                     # Calculate score
@@ -149,15 +166,45 @@ class HoneypotDetector:
                     product = 1.0
                     for p in score:
                         product *= (1-p)
-                    confidence = 1 - product
+                    product *= 10
+                    product = 10 - product
+                    confidence = 1 / (1 + math.e**(-product+5))
+                    result['score'] = confidence
                     print(f'{Fore.GREEN}[*]{Fore.RESET} detected {honeypot} with confidence {confidence} on port {port}')
+                    signature_results.append(result)
 
-                    # Comment logging
-                    #signature_results.append(result)
-                #else:
-                    #signature_results.append((port, None))
+                    with open(self.communcation_log, 'a') as f:
+                        f.write(f'score array {result} with end score {confidence} \n')
+        self.write_log(self.open_ports, signature_results)
 
-        #self.write_log(self.open_ports, signature_results)
+        # Return Honeyscanner object
+        for honeypot in signature_results:
+            name = honeypot['name']
+            if name == 'cowrie' or name == 'kippo':
+                version = self.get_version(name)
+                if not username:
+                    username = 'root'
+                if not password:
+                    password = '1234'
+                return Honeyscanner(
+                    name,
+                    version,
+                    self.ip,
+                    honeypot['port'],
+                    username,
+                    password
+                )
+            
+            if 'dionaea' in name or 'conpot' in name:
+                version = self.get_version(name)
+                return Honeyscanner(
+                    name,
+                    version,
+                    self.ip,
+                    honeypot['port'],
+                    '',
+                    ''
+                )
 
 
     def signature_check(self, port, protocol, signature, result = None):

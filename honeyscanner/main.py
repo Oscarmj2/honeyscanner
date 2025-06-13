@@ -52,6 +52,12 @@ def parse_arguments() -> argparse.Namespace:
         default="",
         help="The password to connect to the honeypot",
     )
+
+    parser.add_argument(
+        "--detect-only",
+        action="store_true",
+        help="Only detect honeypots and not run any attacks"
+    )
     return parser.parse_args()
 
 
@@ -63,7 +69,7 @@ def main() -> None:
     print(ascii_art_honeyscanner())
     detector = HoneypotDetector(args.target_ip)
     honeyscanner = detector.detect_honeypot(args.username, args.password)
-    if not honeyscanner:
+    if not honeyscanner or args.detect_only:
         return
 
     try:
