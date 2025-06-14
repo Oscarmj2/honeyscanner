@@ -31,7 +31,18 @@ class HoneypotDetector:
         self.detection_log = 'detection.log' # Log where detection scores will be written
         self.communcation_log = 'detection_communcation.log' # Log where all communication with server during detection will be written
 
+
     def get_version(self, name):
+        """
+        returns the latest supported version of the following four honeypots, 
+        based on input name, cowrie, kipo, dionaea, conpot
+
+        Args:
+            name (str): name of the honeypot.
+
+        Returns:
+            version (str): Latest version of the honeypot supported.
+        """
         if name == 'cowrie':
             return '2.5.0'
         if name == 'kippo':
@@ -70,12 +81,13 @@ class HoneypotDetector:
         Scans a given IP address to get set of open ports.
 
         Args:
-            ip (str): The IP address of the host to scan.
+            None
 
         Returns:
             PortSet: A set of open ports on the given IP address.
         """
         ports: PortSet = {port for port in range(1, 65536)}
+        # T-pot port set
         #ports: PortSet = {19, 21, 22, 23, 25, 42, 53, 69, 80, 102, 110, 123, 135, 143, 161, 389, 443, 445, 502, 623, 631, 1025, 1080, 1433, 1521, 1723, 1883, 1900, 2404, 2575, 3000, 3306, 3389,
         #                   5000, 5060, 5432, 5555, 5900, 6379, 6667, 8080, 8081, 8090, 8443, 9100, 9200, 10001, 11112, 11211, 11434, 25565, 44818, 47808, 50100, 64294, 64295}
         open_ports = set()
@@ -91,7 +103,14 @@ class HoneypotDetector:
 
     def write_log(self, open_ports, port_results):
         """
-        
+        Writes a log file of the resulting scores on all ports where there was a successful fingerprint
+
+        Args:
+            open_ports (set[int]): The set of open ports.
+            port_results (list[dict]): A list of all positive results of fingerprints and their final scores
+
+        Returns:
+            None
         """
         with open(self.detection_log, 'a') as f:
             f.write('------------ New log start ---------- \n') # To easily search the log for all new entries
@@ -141,7 +160,6 @@ class HoneypotDetector:
         for port in self.open_ports:
             print(f"{Fore.YELLOW}[~]{Fore.RESET} Matching signatures for port {port}...")
 
-            # Log for all communcations with 
             with open(self.communcation_log, 'a') as f:
                 f.write(f'\n----- Fingerprint matching on port {port} ----- \n')
 
@@ -208,6 +226,18 @@ class HoneypotDetector:
 
 
     def signature_check(self, port, protocol, signature, result = None):
+        """
+        Sends the signature to the corresponding function based on which protocol to interact with.
+
+        Args:
+            port (int): port to be commincating with.
+            protocol (str): which protocol to use, currently supported: (ssh, http, https, telnet, socket, dicom).
+            signature (list[dict]): list of signatures (uses the steps format from signatures.yaml).
+            result (dict): A dictionary where data on fingerprint of the honeypot is stored.
+
+        Returns:
+            score (list[int]): a list of the scores from the fingerprinting.
+        """
         match protocol:
             case 'ssh':
                 score = ssh_communication(self.ip, port, signature, result)
@@ -223,6 +253,3 @@ class HoneypotDetector:
                 score = dicom_communcation(self.ip, port, signature, result)
         return score
     
-
-    def create_result_dict(honeypot_name : str):
-        return {'total_signatures' : 0, 'found_signatures' : 0, 'signature_id' : [], 'honeypot' : honeypot_name, 'comments' : {}}

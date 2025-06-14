@@ -6,9 +6,22 @@ import requests
 import time
 import pynetdicom
 import pydicom
-import difflib
 
 def socket_communication(ip, port, signature, result_dict):
+    """
+        Sends fingerprinting signatures from the signature dictionary,
+        and checks if they correspond with the output.
+        Communicates using the socket library.
+
+        Args:
+            ip (str): IP address to communicate with
+            port (int): port number to communicate on.
+            signature (list[dict]): list of signatures (uses the steps format from signatures.yaml).
+            result (dict): A dictionary where data on fingerprint of the honeypot is stored.
+
+        Returns:
+            score (list[int]): a list of the scores from the fingerprinting.
+    """
     score = []
     try:
         for i in range(len(signature)):
@@ -29,6 +42,20 @@ def socket_communication(ip, port, signature, result_dict):
     return score
 
 def ssh_communication(ip, port, signature, result_dict):
+    """
+        Sends fingerprinting signatures from the signature dictionary,
+        and checks if they correspond with the output.
+        Communicates using the paramiko library (ssh).
+
+        Args:
+            ip (str): IP address to communicate with
+            port (int): port number to communicate on.
+            signature (list[dict]): list of signatures (uses the steps format from signatures.yaml).
+            result (dict): A dictionary where data on fingerprint of the honeypot is stored.
+
+        Returns:
+            score (list[int]): a list of the scores from the fingerprinting.
+    """
     score = []
     # Check if port is SSH
     if not check_ssh_connection(ip, port):
@@ -62,6 +89,20 @@ def ssh_communication(ip, port, signature, result_dict):
 
 
 def telnet_communication(ip, port, signature, result_dict):
+    """
+        Sends fingerprinting signatures from the signature dictionary,
+        and checks if they correspond with the output.
+        Communicates using the telnetlib library.
+
+        Args:
+            ip (str): IP address to communicate with
+            port (int): port number to communicate on.
+            signature (list[dict]): list of signatures (uses the steps format from signatures.yaml).
+            result (dict): A dictionary where data on fingerprint of the honeypot is stored.
+
+        Returns:
+            score (list[int]): a list of the scores from the fingerprinting.
+    """
     score = []
     try:
         tn = telnetlib.Telnet(ip, port)
@@ -78,6 +119,20 @@ def telnet_communication(ip, port, signature, result_dict):
         return score
 
 def requests_communication(ip, port, protocol, signature, result_dict = None):
+    """
+        Sends fingerprinting signatures from the signature dictionary,
+        and checks if they correspond with the output.
+        Communicates using the requests library (http/https).
+
+        Args:
+            ip (str): IP address to communicate with
+            port (int): port number to communicate on.
+            signature (list[dict]): list of signatures (uses the steps format from signatures.yaml).
+            result (dict): A dictionary where data on fingerprint of the honeypot is stored.
+
+        Returns:
+            score (list[int]): a list of the scores from the fingerprinting.
+    """
     score = []
     base_url = protocol + '://' + ip + ':' + str(port)
     for i in range(len(signature)):
@@ -108,6 +163,20 @@ def requests_communication(ip, port, protocol, signature, result_dict = None):
 
 
 def dicom_communcation(ip, port, signature, result_dict):
+    """
+        Sends fingerprinting signatures from the signature dictionary,
+        and checks if they correspond with the output.
+        Communicates using the pydicom and pynetdicom library (DICOM).
+
+        Args:
+            ip (str): IP address to communicate with
+            port (int): port number to communicate on.
+            signature (list[dict]): list of signatures (uses the steps format from signatures.yaml).
+            result (dict): A dictionary where data on fingerprint of the honeypot is stored.
+
+        Returns:
+            score (list[int]): a list of the scores from the fingerprinting.
+    """
     score = []
     ae = pynetdicom.AE()
     ae.add_requested_context(pynetdicom.sop_class.PatientRootQueryRetrieveInformationModelGet)
@@ -115,14 +184,11 @@ def dicom_communcation(ip, port, signature, result_dict):
     ds = pydicom.dataset.Dataset()
     try:
         for i in range(len(signature)):
-            ds.PatientID = signature[i]['input'] # For now we only use first input
+            ds.PatientID = signature[i]['input']
             ds.QueryRetrieveLevel = "PATIENT"
-
-            #assoc = ae.associate('198.244.176.149', port, ae_title='ANY-SCP') # IP of a public DICOM server
             
             assoc = ae.associate(ip, port, ae_title='ANY-SCP')
 
-            response_string = ''
             if assoc.is_established:
                 responses = assoc.send_c_get(ds, pynetdicom.sop_class.PatientRootQueryRetrieveInformationModelGet)
                 for (status, identifier) in responses:
@@ -147,14 +213,18 @@ def compare_output(response_string : str, signature_string : str, match_type : s
         return signature_string == response_string
     
 
-def log_signature_result(result : dict, match : bool, signature_id):
-    result['total_signatures'] += 1
-    if match:
-        result['found_signatures'] += 1
-        result['signature_id'].append(signature_id)
-
 
 def check_ssh_connection(ip, port):
+    """
+        Checks if the port is using ssh.
+
+        Args:
+            ip (str): IP address to communicate with.
+            port (int): port number to check.
+
+        Returns:
+            bool: Boolean whether port is ssh or not.
+    """
     try:
         with socket.create_connection((ip, port), timeout=2) as sock:
             banner = sock.recv(1024)
